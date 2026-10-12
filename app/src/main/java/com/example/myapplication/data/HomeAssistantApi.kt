@@ -162,12 +162,12 @@ class HomeAssistantApi(
         }
     }
 
-    suspend fun fetchEntityState(rawEntityId: String): EntityStateResult? = withContext(Dispatchers.IO) {
+    suspend fun fetchEntityState(rawEntityId: String, timeoutMs: Int = 12000): EntityStateResult? = withContext(Dispatchers.IO) {
         val trimmed = rawEntityId.trim()
         if (trimmed.isBlank()) return@withContext null
         val entityId = if (!trimmed.contains(".")) "sensor.$trimmed" else trimmed
         try {
-            val (code, bodyStr) = executeCallUrlConnection("/api/states/$entityId")
+            val (code, bodyStr) = executeCallUrlConnection("/api/states/$entityId", timeoutMs = timeoutMs)
             if (code !in 200..299 || bodyStr == null) {
                 Log.e("HA_API", "fetchEntityState($entityId) failed with HTTP code: $code")
                 return@withContext null
