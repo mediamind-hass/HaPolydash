@@ -37,7 +37,6 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.example.myapplication.data.HaPreferences
-import com.example.myapplication.data.HomeAssistantApi
 
 class HaCompositeWidget : GlanceAppWidget() {
 
@@ -45,7 +44,6 @@ class HaCompositeWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val prefs = HaPreferences(context)
-        val api = HomeAssistantApi(prefs, context)
 
         var cameraBitmap: Bitmap? = null
         var s1Val = "---"
@@ -58,75 +56,22 @@ class HaCompositeWidget : GlanceAppWidget() {
         var b4On = false
 
         if (prefs.isConfigured) {
+            // Read instantly from local cache for One UI 9 background widget compatibility (bypasses background socket restrictions)
+            s1Val = prefs.cachedSensor1Val
+            s2Val = prefs.cachedSensor2Val
+            s3Val = prefs.cachedSensor3Val
+
+            b1On = prefs.cachedBtn1On
+            b2On = prefs.cachedBtn2On
+            b3On = prefs.cachedBtn3On
+            b4On = prefs.cachedBtn4On
+
             try {
-                // Fetch each entity individually via /api/states/{entityId} using OkHttp (same working pattern as the app)
-                val s1Res = api.fetchEntityState(prefs.sensor1Entity)
-                s1Val = formatSensorVal(s1Res?.state, prefs.sensor1Unit)
-                if (s1Res != null) prefs.cachedSensor1Val = s1Val else s1Val = prefs.cachedSensor1Val
-
-                val s2Res = api.fetchEntityState(prefs.sensor2Entity)
-                s2Val = formatSensorVal(s2Res?.state, prefs.sensor2Unit)
-                if (s2Res != null) prefs.cachedSensor2Val = s2Val else s2Val = prefs.cachedSensor2Val
-
-                val s3Res = api.fetchEntityState(prefs.sensor3Entity)
-                s3Val = formatSensorVal(s3Res?.state, prefs.sensor3Unit)
-                if (s3Res != null) prefs.cachedSensor3Val = s3Val else s3Val = prefs.cachedSensor3Val
-
-                val b1Res = api.fetchEntityState(prefs.button1Entity)
-                b1On = isEntityOn(b1Res?.state)
-                if (b1Res != null) prefs.cachedBtn1On = b1On else b1On = prefs.cachedBtn1On
-
-                val b2Res = api.fetchEntityState(prefs.button2Entity)
-                b2On = isEntityOn(b2Res?.state)
-                if (b2Res != null) prefs.cachedBtn2On = b2On else b2On = prefs.cachedBtn2On
-
-                val b3Res = api.fetchEntityState(prefs.button3Entity)
-                b3On = isEntityOn(b3Res?.state)
-                if (b3Res != null) prefs.cachedBtn3On = b3On else b3On = prefs.cachedBtn3On
-
-                val b4Res = api.fetchEntityState(prefs.button4Entity)
-                b4On = isEntityOn(b4Res?.state)
-                if (b4Res != null) prefs.cachedBtn4On = b4On else b4On = prefs.cachedBtn4On
-
-                // Camera snapshot with cache fallback
-                cameraBitmap = try {
-                    api.fetchCameraSnapshot(prefs.cameraEntity)
-                } catch (_: Exception) {
-                    null
+                val cacheFile = java.io.File(context.cacheDir, "camera_cache.jpg")
+                if (cacheFile.exists()) {
+                    cameraBitmap = android.graphics.BitmapFactory.decodeFile(cacheFile.absolutePath)
                 }
-
-                if (cameraBitmap != null) {
-                    try {
-                        val cacheFile = java.io.File(context.cacheDir, "camera_cache.jpg")
-                        cacheFile.outputStream().use { out ->
-                            cameraBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
-                        }
-                    } catch (_: Exception) {}
-                } else {
-                    try {
-                        val cacheFile = java.io.File(context.cacheDir, "camera_cache.jpg")
-                        if (cacheFile.exists()) {
-                            cameraBitmap = android.graphics.BitmapFactory.decodeFile(cacheFile.absolutePath)
-                        }
-                    } catch (_: Exception) {}
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                s1Val = prefs.cachedSensor1Val
-                s2Val = prefs.cachedSensor2Val
-                s3Val = prefs.cachedSensor3Val
-                b1On = prefs.cachedBtn1On
-                b2On = prefs.cachedBtn2On
-                b3On = prefs.cachedBtn3On
-                b4On = prefs.cachedBtn4On
-
-                try {
-                    val cacheFile = java.io.File(context.cacheDir, "camera_cache.jpg")
-                    if (cacheFile.exists()) {
-                        cameraBitmap = android.graphics.BitmapFactory.decodeFile(cacheFile.absolutePath)
-                    }
-                } catch (_: Exception) {}
-            }
+            } catch (_: Exception) {}
         }
 
         provideContent {
@@ -155,21 +100,6 @@ class HaCompositeWidget : GlanceAppWidget() {
         }
     }
 
-    private fun isEntityOn(state: String?): Boolean {
-        if (state == null) return false
-        val s = state.trim().lowercase()
-        return s == "on" || s == "open" || s == "unlocked" || s == "playing" || s == "true" || s == "home"
-    }
-
-    private fun formatSensorVal(raw: String?, unit: String): String {
-        if (raw == null || raw == "N/A" || raw == "unavailable") return "---"
-        val trimmedRaw = raw.trim()
-        val trimmedUnit = unit.trim()
-        if (trimmedUnit.isEmpty()) return trimmedRaw
-        if (trimmedRaw.endsWith(trimmedUnit, ignoreCase = true)) return trimmedRaw
-        return "$trimmedRaw $trimmedUnit"
-    }
-
     @Composable
     private fun WidgetContent(
         isConfigured: Boolean,
@@ -185,7 +115,6 @@ class HaCompositeWidget : GlanceAppWidget() {
         val size = LocalSize.current
         val totalWidth = size.width
 
-        // Calculate exact 65% width X from actual widget size provided by SizeMode.Exact
         val cameraWidth = (totalWidth * 0.65f) - 6.dp
 
         val bgColor = Color(0xFF1E1E2C)
@@ -216,7 +145,7 @@ class HaCompositeWidget : GlanceAppWidget() {
                 return@Column
             }
 
-            // 1. TOP SECTION: CAMERA (65% Width X) + 3 SENSORS (Fills all vertical space above buttons)
+            // 1. TOP SECTION: CAMERA (65% Width X) + 3 SENSORS
             Row(
                 modifier = GlanceModifier
                     .fillMaxWidth()
@@ -268,7 +197,7 @@ class HaCompositeWidget : GlanceAppWidget() {
 
                 Spacer(modifier = GlanceModifier.width(4.dp))
 
-                // 3 SENSORS COLUMN (35% Width X, 3 lines stacked vertically)
+                // 3 SENSORS COLUMN
                 Column(
                     modifier = GlanceModifier
                         .defaultWeight()
@@ -309,7 +238,7 @@ class HaCompositeWidget : GlanceAppWidget() {
 
             Spacer(modifier = GlanceModifier.height(5.dp))
 
-            // 2. BOTTOM SECTION: 4 BUTTONS HORIZONTAL ROW (Height 56dp for plenty of space, 11sp font, 2dp gaps)
+            // 2. BOTTOM SECTION: 4 BUTTONS HORIZONTAL ROW
             Row(
                 modifier = GlanceModifier
                     .fillMaxWidth()
