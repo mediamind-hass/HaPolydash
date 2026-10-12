@@ -60,7 +60,7 @@ class HaCompositeWidget : GlanceAppWidget() {
         if (prefs.isConfigured) {
             try {
                 // Fetch individual entity states using lightweight /api/states/{entityId} (matching app call style)
-                val s1Res = api.fetchEntityState(prefs.sensor1Entity, timeoutMs = 4000)
+                val s1Res = api.fetchEntityState(prefs.sensor1Entity)
                 if (s1Res != null) {
                     s1Val = formatSensorVal(s1Res.state, prefs.sensor1Unit)
                     prefs.cachedSensor1Val = s1Val
@@ -68,7 +68,7 @@ class HaCompositeWidget : GlanceAppWidget() {
                     s1Val = prefs.cachedSensor1Val
                 }
 
-                val s2Res = api.fetchEntityState(prefs.sensor2Entity, timeoutMs = 4000)
+                val s2Res = api.fetchEntityState(prefs.sensor2Entity)
                 if (s2Res != null) {
                     s2Val = formatSensorVal(s2Res.state, prefs.sensor2Unit)
                     prefs.cachedSensor2Val = s2Val
@@ -76,7 +76,7 @@ class HaCompositeWidget : GlanceAppWidget() {
                     s2Val = prefs.cachedSensor2Val
                 }
 
-                val s3Res = api.fetchEntityState(prefs.sensor3Entity, timeoutMs = 4000)
+                val s3Res = api.fetchEntityState(prefs.sensor3Entity)
                 if (s3Res != null) {
                     s3Val = formatSensorVal(s3Res.state, prefs.sensor3Unit)
                     prefs.cachedSensor3Val = s3Val
@@ -84,7 +84,7 @@ class HaCompositeWidget : GlanceAppWidget() {
                     s3Val = prefs.cachedSensor3Val
                 }
 
-                val b1Res = api.fetchEntityState(prefs.button1Entity, timeoutMs = 4000)
+                val b1Res = api.fetchEntityState(prefs.button1Entity)
                 if (b1Res != null) {
                     b1On = isEntityOn(b1Res.state)
                     prefs.cachedBtn1On = b1On
@@ -92,7 +92,7 @@ class HaCompositeWidget : GlanceAppWidget() {
                     b1On = prefs.cachedBtn1On
                 }
 
-                val b2Res = api.fetchEntityState(prefs.button2Entity, timeoutMs = 4000)
+                val b2Res = api.fetchEntityState(prefs.button2Entity)
                 if (b2Res != null) {
                     b2On = isEntityOn(b2Res.state)
                     prefs.cachedBtn2On = b2On
@@ -100,7 +100,7 @@ class HaCompositeWidget : GlanceAppWidget() {
                     b2On = prefs.cachedBtn2On
                 }
 
-                val b3Res = api.fetchEntityState(prefs.button3Entity, timeoutMs = 4000)
+                val b3Res = api.fetchEntityState(prefs.button3Entity)
                 if (b3Res != null) {
                     b3On = isEntityOn(b3Res.state)
                     prefs.cachedBtn3On = b3On
@@ -108,7 +108,7 @@ class HaCompositeWidget : GlanceAppWidget() {
                     b3On = prefs.cachedBtn3On
                 }
 
-                val b4Res = api.fetchEntityState(prefs.button4Entity, timeoutMs = 4000)
+                val b4Res = api.fetchEntityState(prefs.button4Entity)
                 if (b4Res != null) {
                     b4On = isEntityOn(b4Res.state)
                     prefs.cachedBtn4On = b4On
@@ -116,8 +116,8 @@ class HaCompositeWidget : GlanceAppWidget() {
                     b4On = prefs.cachedBtn4On
                 }
 
-                // Fetch camera image with 4s timeout
-                cameraBitmap = try { api.fetchCameraSnapshot(prefs.cameraEntity, timeoutMs = 4000) } catch (_: Exception) { null }
+                // Fetch camera image
+                cameraBitmap = try { api.fetchCameraSnapshot(prefs.cameraEntity) } catch (_: Exception) { null }
                 if (cameraBitmap != null) {
                     try {
                         val cacheFile = java.io.File(context.cacheDir, "camera_cache.jpg")
