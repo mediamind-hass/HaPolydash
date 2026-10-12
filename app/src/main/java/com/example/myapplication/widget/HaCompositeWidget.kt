@@ -37,6 +37,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.example.myapplication.data.HaPreferences
+import com.example.myapplication.data.HomeAssistantApi
 
 class HaCompositeWidget : GlanceAppWidget() {
 
@@ -44,34 +45,90 @@ class HaCompositeWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val prefs = HaPreferences(context)
+        val api = HomeAssistantApi(prefs, context)
 
         var cameraBitmap: Bitmap? = null
-        var s1Val = "---"
-        var s2Val = "---"
-        var s3Val = "---"
+        var s1Val = prefs.cachedSensor1Val
+        var s2Val = prefs.cachedSensor2Val
+        var s3Val = prefs.cachedSensor3Val
 
-        var b1On = false
-        var b2On = false
-        var b3On = false
-        var b4On = false
+        var b1On = prefs.cachedBtn1On
+        var b2On = prefs.cachedBtn2On
+        var b3On = prefs.cachedBtn3On
+        var b4On = prefs.cachedBtn4On
 
         if (prefs.isConfigured) {
-            // Read instantly from local cache for One UI 9 background widget compatibility (bypasses background socket restrictions)
-            s1Val = prefs.cachedSensor1Val
-            s2Val = prefs.cachedSensor2Val
-            s3Val = prefs.cachedSensor3Val
-
-            b1On = prefs.cachedBtn1On
-            b2On = prefs.cachedBtn2On
-            b3On = prefs.cachedBtn3On
-            b4On = prefs.cachedBtn4On
-
             try {
-                val cacheFile = java.io.File(context.cacheDir, "camera_cache.jpg")
-                if (cacheFile.exists()) {
-                    cameraBitmap = android.graphics.BitmapFactory.decodeFile(cacheFile.absolutePath)
+                // Try fetching fresh states via OkHttp in background. If One UI 9 restricts background socket, catch and use cache.
+                val allStatesMap = api.fetchAllStatesMap()
+
+                if (allStatesMap.isNotEmpty()) {
+                    val s1Res = allStatesMap[prefs.sensor1Entity]
+                    if (s1Res != null) {
+                        s1Val = formatSensorVal(s1Res.state, prefs.sensor1Unit)
+                        prefs.cachedSensor1Val = s1Val
+                    }
+
+                    val s2Res = allStatesMap[prefs.sensor2Entity]
+                    if (s2Res != null) {
+                        s2Val = formatSensorVal(s2Res.state, prefs.sensor2Unit)
+                        prefs.cachedSensor2Val = s2Val
+                    }
+
+                    val s3Res = allStatesMap[prefs.sensor3Entity]
+                    if (s3Res != null) {
+                        s3Val = formatSensorVal(s3Res.state, prefs.sensor3Unit)
+                        prefs.cachedSensor3Val = s3Val
+                    }
+
+                    val b1Res = allStatesMap[prefs.button1Entity]
+                    if (b1Res != null) {
+                        b1On = isEntityOn(b1Res.state)
+                        prefs.cachedBtn1On = b1On
+                    }
+
+                    val b2Res = allStatesMap[prefs.button2Entity]
+                    if (b2Res != null) {
+                        b2On = isEntityOn(b2Res.state)
+                        prefs.cachedBtn2On = b2On
+                    }
+
+                    val b3Res = allStatesMap[prefs.button3Entity]
+                    if (b3Res != null) {
+                        b3On = isEntityOn(b3Res.state)
+                        prefs.cachedBtn3On = b3On
+                    }
+
+                    val b4Res = allStatesMap[prefs.button4Entity]
+                    if (b4Res != null) {
+                        b4On = isEntityOn(b4Res.state)
+                        prefs.cachedBtn4On = b4On
+                    }
                 }
-            } catch (_: Exception) {}
+
+                // Try fetching camera snapshot
+                cameraBitmap = try { api.fetchCameraSnapshot(prefs.cameraEntity) } catch (_: Exception) { null }
+                if (cameraBitmap != null) {
+                    try {
+                        val cacheFile = java.io.File(context.cacheDir, "camera_cache.jpg")
+                        cacheFile.outputStream().use { out ->
+                            cameraBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                        }
+                    } catch (_: Exception) {}
+                }
+            } catch (_: Exception) {
+                // Background network restricted -> fall back to cache values already loaded above
+            }
+
+            // Fallback to cache file for camera if null
+            if (cameraBitmap == null) {
+                try {
+                    val cacheFile = java.io.File(context.cacheDir, "camera_cache.jpg")
+                    if (cacheFile.exists()) {
+                        cameraBitmap = android.graphics.BitmapFactory.decodeFile(cacheFile.absolutePath)
+                    }
+                } catch (_: Exception) {}
+            }
         }
 
         provideContent {
@@ -98,6 +155,21 @@ class HaCompositeWidget : GlanceAppWidget() {
                 b4On = b4On
             )
         }
+    }
+
+    private fun isEntityOn(state: String?): Boolean {
+        if (state == null) return false
+        val s = state.trim().lowercase()
+        return s == "on" || s == "open" || s == "unlocked" || s == "playing" || s == "true" || s == "home"
+    }
+
+    private fun formatSensorVal(raw: String?, unit: String): String {
+        if (raw == null || raw == "N/A" || raw == "unavailable") return "---"
+        val trimmedRaw = raw.trim()
+        val trimmedUnit = unit.trim()
+        if (trimmedUnit.isEmpty()) return trimmedRaw
+        if (trimmedRaw.endsWith(trimmedUnit, ignoreCase = true)) return trimmedRaw
+        return "$trimmedRaw $trimmedUnit"
     }
 
     @Composable
