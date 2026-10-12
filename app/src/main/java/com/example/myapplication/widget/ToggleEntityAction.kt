@@ -7,6 +7,10 @@ import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.action.ActionParameters.Key
 import com.example.myapplication.data.HaPreferences
 import com.example.myapplication.data.HomeAssistantApi
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class ToggleEntityAction : ActionCallback {
     override suspend fun onAction(
@@ -16,13 +20,25 @@ class ToggleEntityAction : ActionCallback {
     ) {
         val entityId = parameters[KEY_ENTITY_ID] ?: return
         val prefs = HaPreferences(context)
-        val api = HomeAssistantApi(prefs)
+        val api = HomeAssistantApi(prefs, context)
 
-        // Call Home Assistant service toggle
+        // 1. Call Home Assistant service toggle/turn_on immediately
         api.callEntityService(entityId, "toggle")
 
-        // Update widget UI
-        HaCompositeWidget().update(context, glanceId)
+        // 2. Update widget UI immediately
+        try {
+            HaCompositeWidget().update(context, glanceId)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // 3. Delayed background re-update in separate job so Glance SessionWorker isn't cancelled
+        CoroutineScope(Dispatchers.IO).launch {
+            delay(1000)
+            try {
+                HaCompositeWidget().update(context, glanceId)
+            } catch (_: Exception) {}
+        }
     }
 
     companion object {
@@ -36,6 +52,10 @@ class RefreshWidgetAction : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters
     ) {
-        HaCompositeWidget().update(context, glanceId)
+        try {
+            HaCompositeWidget().update(context, glanceId)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }
