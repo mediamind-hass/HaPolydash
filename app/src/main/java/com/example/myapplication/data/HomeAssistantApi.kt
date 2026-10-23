@@ -38,6 +38,12 @@ class HomeAssistantApi(
     private val prefs: HaPreferences,
     private val context: Context? = null
 ) {
+    init {
+        if (context != null) {
+            NetworkUtils.bindProcessToLocalNetwork(context)
+        }
+    }
+
     private val client: OkHttpClient by lazy {
         try {
             val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
